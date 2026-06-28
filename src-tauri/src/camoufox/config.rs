@@ -70,7 +70,7 @@ fn cast_to_properties(
 
             // Replace Firefox version in user agent strings
             if let (Some(version), Some(s)) = (ff_version, final_value.as_str()) {
-              let replaced = replace_ff_version(s, version);
+              let replaced = presets::rewrite_ua_firefox_version(s, version);
               final_value = serde_json::json!(replaced);
             }
 
@@ -90,18 +90,6 @@ fn cast_to_properties(
       }
     }
   }
-}
-
-/// Replace Firefox version in user agent and related strings.
-fn replace_ff_version(s: &str, version: u32) -> String {
-  // Match patterns like "135.0" (Firefox version) and replace with new version
-  let re = regex_lite::Regex::new(r"(?<!\d)(1[0-9]{2})(\.0)(?!\d)").unwrap_or_else(|_| {
-    // Fallback - just do simple replacement
-    regex_lite::Regex::new(r"Firefox/\d+").unwrap()
-  });
-
-  re.replace_all(s, format!("{}.0", version).as_str())
-    .to_string()
 }
 
 /// Handle window.screenX and window.screenY generation.
@@ -432,7 +420,14 @@ impl CamoufoxConfigBuilder {
       match webgl::sample_webgl(target_os, None, None) {
         Ok(webgl_data) => {
           for (key, value) in webgl_data.config {
-            config.insert(key, value);
+            // webGl2Enabled is not a CAMOU_CONFIG key Camoufox reads; it
+            // selects the WebGL2 pref. Route it there (mirrors upstream
+            // pythonlib/camoufox utils.py) instead of emitting a dead key.
+            if key == "webGl2Enabled" {
+              firefox_prefs.insert("webgl.enable-webgl2".to_string(), value);
+            } else {
+              config.insert(key, value);
+            }
           }
           firefox_prefs.insert("webgl.force-enabled".to_string(), serde_json::json!(true));
         }
@@ -442,12 +437,13 @@ impl CamoufoxConfigBuilder {
       }
     }
 
-    // Canvas anti-fingerprinting
-    config.insert(
-      "canvas:aaOffset".to_string(),
-      serde_json::json!(rng.random_range(-50..=50)),
-    );
-    config.insert("canvas:aaCapOffset".to_string(), serde_json::json!(true));
+    // Canvas anti-fingerprinting: canvas:aaOffset / canvas:aaCapOffset are
+    // registered in the schema but no Camoufox 146 patch reads them (only
+    // canvas:seed / canvas:noiseDensity / canvas:noiseStrength are live), so
+    // emitting them was dead payload. A stable per-profile canvas:seed is the
+    // real win, but rand::rng() here is per-launch — a seed emitted now would
+    // change every launch (worse than none). Deferred until a persisted
+    // per-profile seed can be threaded in.
 
     // Add extra config (user-provided)
     for (key, value) in self.extra_config {
@@ -633,13 +629,6 @@ mod tests {
     assert!(config
       .firefox_prefs
       .contains_key("permissions.default.image"));
-  }
-
-  #[test]
-  fn test_replace_ff_version() {
-    let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0";
-    let replaced = replace_ff_version(ua, 140);
-    assert!(replaced.contains("140.0"));
   }
 
   #[test]

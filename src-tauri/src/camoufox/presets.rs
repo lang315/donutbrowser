@@ -198,12 +198,10 @@ pub fn from_preset(preset: &Preset, ff_version: Option<u32>) -> HashMap<String, 
         serde_json::json!(hc),
       );
     }
-    if let Some(mtp) = nav.max_touch_points {
-      config.insert(
-        "navigator.maxTouchPoints".to_string(),
-        serde_json::json!(mtp),
-      );
-    }
+    // navigator.maxTouchPoints is intentionally not emitted: Camoufox 146
+    // has no MaskConfig reader for it on the CAMOU_CONFIG env path (it is
+    // applied only via the Playwright Juggler BrowsingContext override).
+    // The struct field is kept so preset JSON still parses.
     // navigator.oscpu — explicit, or derived from the platform.
     let oscpu = nav.oscpu.clone().or_else(|| {
       nav.platform.as_deref().and_then(|plat| match plat {
@@ -253,7 +251,7 @@ pub fn from_preset(preset: &Preset, ff_version: Option<u32>) -> HashMap<String, 
   config
 }
 
-fn rewrite_ua_firefox_version(ua: &str, version: u32) -> String {
+pub(crate) fn rewrite_ua_firefox_version(ua: &str, version: u32) -> String {
   let firefox_re = Regex::new(r"Firefox/\d+\.0").expect("static regex");
   let rv_re = Regex::new(r"rv:\d+\.0").expect("static regex");
   let first = firefox_re.replace_all(ua, format!("Firefox/{version}.0"));
@@ -265,6 +263,18 @@ fn rewrite_ua_firefox_version(ua: &str, version: u32) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn rewrite_ua_firefox_version_rewrites_both_tokens() {
+    let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0";
+    let out = rewrite_ua_firefox_version(ua, 146);
+    // regex-lite-safe rewrite must hit both tokens cleanly — no stale 135.0
+    // and no malformed 146.0.0 (the old lookaround-fallback bug).
+    assert!(out.contains("Firefox/146.0"), "got: {out}");
+    assert!(out.contains("rv:146.0"), "got: {out}");
+    assert!(!out.contains("135.0"), "stale version left: {out}");
+    assert!(!out.contains("146.0.0"), "malformed token: {out}");
+  }
 
   #[test]
   fn picks_v135_for_old_firefox() {
