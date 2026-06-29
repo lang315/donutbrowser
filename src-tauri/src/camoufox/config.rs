@@ -655,6 +655,12 @@ mod tests {
         hardware_concurrency: 8,
         ..Default::default()
       },
+      battery: Some(BatteryFingerprint {
+        charging: true,
+        charging_time: 0.0,
+        discharging_time: 3600.0,
+        level: 0.85,
+      }),
       ..Default::default()
     };
 
@@ -662,5 +668,20 @@ mod tests {
 
     assert!(config.contains_key("navigator.userAgent"));
     assert!(config.contains_key("screen.width"));
+
+    // A battery's `level` flows through browserforge.yml into the CAMOU_CONFIG
+    // map (mapping: `level: battery:level`).
+    assert_eq!(config.get("battery:level"), Some(&serde_json::json!(0.85)));
+
+    // webGl2Enabled is routed to the `webgl.enable-webgl2` Firefox pref (see
+    // build()), never emitted as a CAMOU_CONFIG key. Build the full config so
+    // webgl sampling actually runs.
+    let launch = CamoufoxConfigBuilder::new()
+      .fingerprint(fingerprint)
+      .ff_version(140)
+      .build()
+      .unwrap();
+    assert!(!launch.fingerprint_config.contains_key("webGl2Enabled"));
+    assert!(launch.firefox_prefs.contains_key("webgl.enable-webgl2"));
   }
 }
