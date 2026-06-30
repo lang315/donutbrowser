@@ -5,9 +5,10 @@ navigator:
   # The version will be replaced in Camoufox.
   userAgent: navigator.userAgent
   # userAgentData not in Firefox
-  doNotTrack: navigator.doNotTrack
-  appCodeName: navigator.appCodeName
-  appName: navigator.appName
+  # Camoufox 146 has no MaskConfig reader for these — dead keys, removed:
+  #   doNotTrack: navigator.doNotTrack   (drive via privacy.donottrackheader.* pref instead)
+  #   appCodeName: navigator.appCodeName
+  #   appName: navigator.appName
   appVersion: navigator.appVersion
   oscpu: navigator.oscpu
   # webdriver is always True
@@ -17,12 +18,13 @@ navigator:
   platform: navigator.platform
   # deviceMemory not in Firefox
   hardwareConcurrency: navigator.hardwareConcurrency
-  product: navigator.product
+  # product: navigator.product   # dead key — no MaskConfig reader in 146
   # Never override productSub #105
   # productSub: navigator.productSub
   # vendor is not necessary
   # vendorSub is not necessary
-  maxTouchPoints: navigator.maxTouchPoints
+  # maxTouchPoints: navigator.maxTouchPoints  # dead on the env path — 146 only
+  #   honors maxTouchPoints via the Playwright Juggler override, not CAMOU_CONFIG
   extraProperties:
     # Note: Changing pdfViewerEnabled is not recommended. This will be kept to True.
     globalPrivacyControl: navigator.globalPrivacyControl
@@ -63,6 +65,7 @@ battery:
   charging: battery:charging
   chargingTime: battery:chargingTime
   dischargingTime: battery:dischargingTime
+  level: battery:level
 
 # Unsupported: videoCodecs, audioCodecs, pluginsData, multimediaDevices
 # Fonts are listed through the launcher.
